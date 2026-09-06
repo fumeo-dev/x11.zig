@@ -1,0 +1,13 @@
+.{
+    .name = .x11,
+    .version = "0.0.0",
+    .minimum_zig_version = "0.16.0",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "README.md",
+        "LICENSE.txt",
+    },
+    .fingerprint = 0x3220e772a4540755,
+}
