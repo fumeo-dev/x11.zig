@@ -1,0 +1,70 @@
+name: Bug Report
+description: Report unexpected behavior in x11.zig
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug.
+
+        Please provide enough information to help reproduce and investigate the issue.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Clearly describe the unexpected behavior.
+      placeholder: Tell us what happened.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Describe the steps required to reproduce the issue.
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Provide information about the environment where the issue occurs.
+      placeholder: |
+        Zig version:
+        OS / distribution:
+        X server:
+        x11.zig version or commit:
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Add any other information that may help investigate the issue.
+    validations:
+      required: false
