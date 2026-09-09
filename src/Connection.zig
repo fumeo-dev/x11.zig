@@ -26,7 +26,7 @@ stream_writer: Stream.Writer,
 /// Opens a connection to an X server.
 pub fn open(allocator: Allocator, io: Io, display: Display) !Connection {
     const stream = switch (display) {
-        .unix => |unix| try openUnix(io, unix),
+        .unix => |path| try openUnix(io, path),
         .tcp => |tcp| try openTcp(io, tcp),
     };
     errdefer stream.close(io);
@@ -67,46 +67,12 @@ pub fn writer(self: *Connection) *Io.Writer {
     return &self.stream_writer.interface;
 }
 
-fn openUnix(io: Io, display: Display.Unix) !Stream {
-    return switch (display) {
-        .number => |number| {
-            var buffer: [UnixAddress.max_len]u8 = undefined;
-
-            const path = try std.fmt.bufPrint(&buffer, "/tmp/.X11-unix/X{d}", .{number});
-
-            const address = try UnixAddress.init(path);
-            return address.connect(io);
-        },
-
-        .path => |path| {
-            const address = try UnixAddress.init(path);
-            return address.connect(io);
-        },
-    };
+fn openUnix(io: Io, path: []const u8) !Stream {
+    const address = try UnixAddress.init(path);
+    return address.connect(io);
 }
 
 fn openTcp(io: Io, display: Display.Tcp) !Stream {
     const host = try HostName.init(display.host);
-
-    // X11 display N maps to TCP port 6000 + N.
-    // Reject the display number if the resulting port overflows.
-    const port = std.math.add(u16, 6000, display.number) catch
-        return error.InvalidDisplayNumber;
-
-    return host.connect(io, port, .{ .mode = .stream });
-}
-
-test "TCP display number overflow" {
-    const display: Display.Tcp = .{
-        .host = "localhost",
-        .number = std.math.maxInt(u16),
-    };
-
-    try std.testing.expectError(
-        error.InvalidDisplayNumber,
-        openTcp(
-            std.testing.io,
-            display,
-        ),
-    );
+    return host.connect(io, display.port, .{ .mode = .stream });
 }
