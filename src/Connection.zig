@@ -1,3 +1,5 @@
+//! Represents a live connection to an X server.
+
 const Connection = @This();
 
 const std = @import("std");
@@ -21,6 +23,7 @@ writer_buffer: []u8,
 stream_reader: Stream.Reader,
 stream_writer: Stream.Writer,
 
+/// Opens a connection to an X server.
 pub fn open(allocator: Allocator, io: Io, display: Display) !Connection {
     const stream = switch (display) {
         .unix => |unix| try openUnix(io, unix),
@@ -46,6 +49,7 @@ pub fn open(allocator: Allocator, io: Io, display: Display) !Connection {
     };
 }
 
+/// Closes the connection and releases all resources owned by it.
 pub fn close(self: *Connection) void {
     self.stream_reader.stream.close(self.io);
 
@@ -53,10 +57,12 @@ pub fn close(self: *Connection) void {
     self.allocator.free(self.writer_buffer);
 }
 
+/// Returns the reader for the connection's X11 stream.
 pub fn reader(self: *Connection) *Io.Reader {
     return &self.stream_reader.interface;
 }
 
+/// Returns the writer for the connection's X11 stream.
 pub fn writer(self: *Connection) *Io.Writer {
     return &self.stream_writer.interface;
 }
