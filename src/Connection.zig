@@ -89,3 +89,18 @@ fn openTcp(io: Io, display: Display.Tcp) !Stream {
 
     return host.connect(io, port, .{ .mode = .stream });
 }
+
+test "TCP display number overflow" {
+    const display: Display.Tcp = .{
+        .host = "localhost",
+        .number = std.math.maxInt(u16),
+    };
+
+    try std.testing.expectError(
+        error.InvalidDisplayNumber,
+        openTcp(
+            std.testing.io,
+            display,
+        ),
+    );
+}
