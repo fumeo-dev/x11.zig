@@ -10,6 +10,10 @@ const examples = [_]Example{
         .name = "connect",
         .file = "connect.zig",
     },
+    .{
+        .name = "handshake",
+        .file = "handshake.zig",
+    },
 };
 
 pub fn build(b: *std.Build) void {
