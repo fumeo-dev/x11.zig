@@ -1,3 +1,5 @@
+//! Performs the X11 connection setup handshake.
+
 const Handshake = @This();
 
 const std = @import("std");
@@ -8,93 +10,193 @@ const Endian = std.builtin.Endian;
 const Reader = std.Io.Reader;
 const Writer = std.Io.Writer;
 
+/// Describes an X11 connection setup request.
 pub const Request = struct {
+    /// Byte order used by the client.
     byte_order: Endian = .native,
+
+    /// X11 protocol major version.
     protocol_major: u16 = 11,
+
+    /// X11 protocol minor version.
     protocol_minor: u16 = 0,
+
+    /// Authorization protocol name.
     authorization_protocol_name: []const u8 = "",
+
+    /// Authorization protocol data.
     authorization_protocol_data: []const u8 = "",
 };
 
+/// Contains the X11 server's connection setup response.
 pub const Response = struct {
     allocator: Allocator,
+
+    /// Result of the connection setup.
     status: Status,
 
+    /// X11 protocol major version.
     protocol_major: ?u16 = null,
+
+    /// X11 protocol minor version.
     protocol_minor: ?u16 = null,
 
+    /// Failure or authentication reason.
     reason: ?[]u8 = null,
 
+    /// X server release number.
     release_number: ?u32 = null,
+
+    /// Base resource identifier allocated to the client.
     resource_id_base: ?u32 = null,
+
+    /// Resource identifier mask allocated to the client.
     resource_id_mask: ?u32 = null,
+
+    /// Size of the server's motion history buffer.
     motion_buffer_size: ?u32 = null,
+
+    /// Maximum request length supported by the server.
     maximum_request_length: ?u16 = null,
 
+    /// Byte order used for images.
     image_byte_order: ?Endian = null,
+
+    /// Bit order used for bitmaps.
     bitmap_bit_order: ?Endian = null,
+
+    /// Bitmap scanline unit size.
     bitmap_scanline_unit: ?u8 = null,
+
+    /// Bitmap scanline padding.
     bitmap_scanline_pad: ?u8 = null,
 
+    /// Minimum valid keycode.
     min_keycode: ?u8 = null,
+
+    /// Maximum valid keycode.
     max_keycode: ?u8 = null,
 
+    /// Name of the X server vendor.
     vendor: ?[]u8 = null,
+
+    /// Pixmap formats supported by the X server.
     pixmap_formats: ?[]Format = null,
+
+    /// Screens provided by the X server.
     roots: ?[]Screen = null,
 
+    /// Describes the result of the connection setup.
     pub const Status = enum(u8) {
         failed = 0,
         success = 1,
         authenticate = 2,
     };
 
+    /// Describes a pixmap format supported by the X server.
     pub const Format = struct {
+        /// Drawable depth of the format.
         depth: u8,
+
+        /// Number of bits used to represent each pixel.
         bits_per_pixel: u8,
+
+        /// Scanline padding in bits.
         scanline_pad: u8,
     };
 
+    /// Describes a screen provided by the X server.
     pub const Screen = struct {
+        /// Root window identifier.
         root: u32,
+
+        /// Width of the screen in pixels.
         width_in_pixels: u16,
+
+        /// Height of the screen in pixels.
         height_in_pixels: u16,
+
+        /// Width of the screen in millimeters.
         width_in_millimeters: u16,
+
+        /// Height of the screen in millimeters.
         height_in_millimeters: u16,
+
+        /// Depth of the root window.
         root_depth: u8,
+
+        /// Root visual identifier.
         root_visual: u32,
+
+        /// Default colormap identifier.
         default_colormap: u32,
+
+        /// White pixel value.
         white_pixel: u32,
+
+        /// Black pixel value.
         black_pixel: u32,
+
+        /// Minimum number of installed colormaps.
         min_installed_maps: u16,
+
+        /// Maximum number of installed colormaps.
         max_installed_maps: u16,
+
+        /// Backing store behavior supported by the screen.
         backing_stores: BackingStores,
+
+        /// Whether the screen supports save-under.
         save_unders: bool,
+
+        /// Currently enabled input event masks.
         current_input_masks: u32,
+
+        /// Depths and visuals supported by the screen.
         allowed_depths: []Depth,
     };
 
+    /// Describes a depth supported by a screen.
     pub const Depth = struct {
+        /// Depth value.
         depth: u8,
+
+        /// Visual types available at this depth.
         visuals: []VisualType,
     };
 
+    /// Describes a visual type supported by a screen.
     pub const VisualType = struct {
+        /// Visual identifier.
         visual_id: u32,
+
+        /// Visual class.
         class: VisualClass,
+
+        /// Number of bits used for each RGB component.
         bits_per_rgb_value: u8,
+
+        /// Number of colormap entries.
         colormap_entries: u16,
+
+        /// Red component mask.
         red_mask: u32,
+
+        /// Green component mask.
         green_mask: u32,
+
+        /// Blue component mask.
         blue_mask: u32,
     };
 
+    /// Describes when the screen supports backing stores.
     pub const BackingStores = enum(u8) {
         never = 0,
         when_mapped = 1,
         always = 2,
     };
 
+    /// Describes the class of a visual.
     pub const VisualClass = enum(u8) {
         static_gray = 0,
         gray_scale = 1,
@@ -104,6 +206,7 @@ pub const Response = struct {
         direct_color = 5,
     };
 
+    /// Releases memory owned by the response.
     pub fn deinit(self: *Response) void {
         if (self.reason) |reason| {
             self.allocator.free(reason);
@@ -124,6 +227,7 @@ pub const Response = struct {
     }
 };
 
+/// Performs the X11 connection setup handshake.
 pub fn perform(
     allocator: Allocator,
     request: Request,
