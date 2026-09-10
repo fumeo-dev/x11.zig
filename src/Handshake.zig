@@ -563,3 +563,473 @@ fn freeDepths(allocator: Allocator, depths: []Response.Depth) void {
         allocator.free(depth.visuals);
     }
 }
+
+test "encodes the setup request" {
+    var buffer: [12]u8 = undefined;
+    var writer = Writer.fixed(&buffer);
+
+    try writeRequest(&writer, .{
+        .byte_order = .little,
+    });
+
+    try std.testing.expectEqualSlices(u8, &[_]u8{
+        'l', 0,
+        11,  0,
+        0,   0,
+        0,   0,
+        0,   0,
+        0,   0,
+    }, writer.buffered());
+}
+
+test "encodes the setup request with authorization" {
+    const name = "MIT-MAGIC-COOKIE-1";
+    const data = "abcd";
+
+    var buffer: [36]u8 = undefined;
+    var writer = Writer.fixed(&buffer);
+
+    try writeRequest(&writer, .{
+        .byte_order = .little,
+        .authorization_protocol_name = name,
+        .authorization_protocol_data = data,
+    });
+
+    // zig fmt: off
+    try std.testing.expectEqualSlices(u8, &[_]u8{
+        'l', 0,
+        11,  0,
+        0,   0,
+        18,  0,
+        4,   0,
+        0,   0,
+
+        'M', 'I', 'T', '-',
+        'M', 'A', 'G', 'I',
+        'C', '-', 'C', 'O',
+        'O', 'K', 'I', 'E',
+        '-',
+        '1',
+        0,
+
+        'a', 'b', 'c', 'd',
+    }, writer.buffered());
+    // zig fmt: on
+}
+
+test "rejects an authorization protocol name that is too long" {
+    const name = [_]u8{0} ** 65536;
+
+    var buffer: [12]u8 = undefined;
+    var writer = Writer.fixed(&buffer);
+
+    try std.testing.expectError(
+        error.AuthNameTooLong,
+        writeRequest(&writer, .{
+            .byte_order = .little,
+            .authorization_protocol_name = &name,
+        }),
+    );
+}
+
+test "rejects authorization data that is too long" {
+    const data = [_]u8{0} ** 65536;
+
+    var buffer: [12]u8 = undefined;
+    var writer = Writer.fixed(&buffer);
+
+    try std.testing.expectError(
+        error.AuthDataTooLong,
+        writeRequest(&writer, .{
+            .byte_order = .little,
+            .authorization_protocol_data = &data,
+        }),
+    );
+}
+
+test "reads a failed setup response" {
+    // zig fmt: off
+    const bytes = [_]u8{
+        6,
+        11, 0,
+        0, 0,
+        0, 0,
+        'd', 'e', 'n', 'i', 'e', 'd',
+        0, 0,
+    };
+    // zig fmt: on
+
+    var reader = Reader.fixed(&bytes);
+
+    var response = try readFailed(
+        std.testing.allocator,
+        &reader,
+        .little,
+    );
+    defer response.deinit();
+
+    try std.testing.expectEqual(
+        Response.Status.failed,
+        response.status,
+    );
+    try std.testing.expectEqual(
+        @as(?u16, 11),
+        response.protocol_major,
+    );
+    try std.testing.expectEqual(
+        @as(?u16, 0),
+        response.protocol_minor,
+    );
+    try std.testing.expectEqualSlices(
+        u8,
+        "denied",
+        response.reason.?,
+    );
+}
+
+test "reads an authenticate setup response" {
+    // zig fmt: off
+    const bytes = [_]u8{
+        10,
+        0, 0, 0, 0, 0, 0, 0,
+        'n', 'e', 'e', 'd', ' ', 'a', 'u', 't', 'h', '!',
+        0, 0,
+    };
+    // zig fmt: on
+
+    var reader = Reader.fixed(&bytes);
+
+    var response = try readAuthenticate(
+        std.testing.allocator,
+        &reader,
+    );
+    defer response.deinit();
+
+    try std.testing.expectEqual(
+        Response.Status.authenticate,
+        response.status,
+    );
+    try std.testing.expectEqualSlices(
+        u8,
+        "need auth!",
+        response.reason.?,
+    );
+}
+
+test "reads a successful setup response" {
+    // zig fmt: off
+    const bytes = [_]u8{
+        0,
+        11, 0,
+        0, 0,
+        0, 0,
+
+        1, 0, 0, 0,
+        0, 0, 0, 0,
+        0xff, 0xff, 0xff, 0xff,
+        0, 0, 0, 0,
+
+        4, 0,
+        8, 0,
+        1,
+        1,
+        0,
+        1,
+        32,
+        32,
+        8,
+        8,
+        8,
+        255,
+        0, 0, 0, 0,
+
+        'T', 'E', 'S', 'T',
+        0, 0, 0, 0,
+
+        24,
+        32,
+        32,
+        0, 0, 0, 0, 0,
+
+        24,
+        0,
+        1, 0,
+        0, 0, 0, 0,
+        0, 0, 0, 0,
+
+        0x10, 0x00, 0x00, 0x00,
+        0x08, 0x00,
+        0x10, 0x00,
+
+        0,
+        1,
+        24,
+
+        0x33, 0x22, 0x11, 0x00,
+        0x00, 0x00, 0x00, 0x00,
+        0xff, 0xff, 0xff, 0xff,
+        0x00, 0x00, 0x00, 0x00,
+
+        8,
+        0,
+        1, 0,
+        0, 0, 0, 0,
+
+        0x20, 0x00, 0x00, 0x00,
+        4,
+        8,
+        0x00, 0x00,
+        0x00, 0x00,
+
+        0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00,
+
+        0, 0, 0, 0,
+    };
+    // zig fmt: on
+
+    var reader = Reader.fixed(&bytes);
+
+    var response = try readSuccess(
+        std.testing.allocator,
+        &reader,
+        .little,
+    );
+    defer response.deinit();
+
+    try std.testing.expectEqual(
+        Response.Status.success,
+        response.status,
+    );
+    try std.testing.expectEqual(
+        @as(?u16, 11),
+        response.protocol_major,
+    );
+    try std.testing.expectEqual(
+        @as(?u16, 0),
+        response.protocol_minor,
+    );
+    try std.testing.expectEqual(
+        @as(?u32, 1),
+        response.release_number,
+    );
+    try std.testing.expectEqual(
+        @as(?u32, 0),
+        response.resource_id_base,
+    );
+    try std.testing.expectEqual(
+        @as(?u32, 0xffffffff),
+        response.resource_id_mask,
+    );
+    try std.testing.expectEqual(
+        @as(?u32, 0),
+        response.motion_buffer_size,
+    );
+    try std.testing.expectEqual(
+        @as(?u16, 8),
+        response.maximum_request_length,
+    );
+    try std.testing.expectEqual(
+        .little,
+        response.image_byte_order.?,
+    );
+    try std.testing.expectEqual(
+        .big,
+        response.bitmap_bit_order.?,
+    );
+    try std.testing.expectEqual(
+        @as(?u8, 32),
+        response.bitmap_scanline_unit,
+    );
+    try std.testing.expectEqual(
+        @as(?u8, 32),
+        response.bitmap_scanline_pad,
+    );
+    try std.testing.expectEqual(
+        @as(?u8, 8),
+        response.min_keycode,
+    );
+    try std.testing.expectEqual(
+        @as(?u8, 8),
+        response.max_keycode,
+    );
+
+    try std.testing.expectEqualSlices(
+        u8,
+        "TEST",
+        response.vendor.?,
+    );
+
+    const formats = response.pixmap_formats.?;
+    try std.testing.expectEqual(
+        @as(usize, 1),
+        formats.len,
+    );
+    try std.testing.expectEqual(
+        @as(u8, 24),
+        formats[0].depth,
+    );
+    try std.testing.expectEqual(
+        @as(u8, 32),
+        formats[0].bits_per_pixel,
+    );
+    try std.testing.expectEqual(
+        @as(u8, 32),
+        formats[0].scanline_pad,
+    );
+
+    const roots = response.roots.?;
+    try std.testing.expectEqual(
+        @as(usize, 1),
+        roots.len,
+    );
+
+    const screen = roots[0];
+
+    try std.testing.expectEqual(
+        @as(u32, 0x00000001),
+        screen.root,
+    );
+    try std.testing.expectEqual(
+        @as(u16, 16),
+        screen.width_in_pixels,
+    );
+    try std.testing.expectEqual(
+        @as(u16, 8),
+        screen.height_in_pixels,
+    );
+    try std.testing.expectEqual(
+        @as(u16, 16),
+        screen.width_in_millimeters,
+    );
+    try std.testing.expectEqual(
+        @as(u16, 8),
+        screen.height_in_millimeters,
+    );
+    try std.testing.expectEqual(
+        @as(u8, 24),
+        screen.root_depth,
+    );
+    try std.testing.expectEqual(
+        @as(u32, 0x00112233),
+        screen.root_visual,
+    );
+    try std.testing.expectEqual(
+        @as(u32, 0),
+        screen.default_colormap,
+    );
+    try std.testing.expectEqual(
+        @as(u32, 0xffffffff),
+        screen.white_pixel,
+    );
+    try std.testing.expectEqual(
+        @as(u32, 0),
+        screen.black_pixel,
+    );
+    try std.testing.expectEqual(
+        @as(u16, 8),
+        screen.min_installed_maps,
+    );
+    try std.testing.expectEqual(
+        @as(u16, 16),
+        screen.max_installed_maps,
+    );
+    try std.testing.expectEqual(
+        Response.BackingStores.never,
+        screen.backing_stores,
+    );
+    try std.testing.expect(screen.save_unders);
+
+    try std.testing.expectEqual(
+        @as(u32, 0),
+        screen.current_input_masks,
+    );
+
+    try std.testing.expectEqual(
+        @as(usize, 1),
+        screen.allowed_depths.len,
+    );
+
+    const depth = screen.allowed_depths[0];
+
+    try std.testing.expectEqual(
+        @as(u8, 8),
+        depth.depth,
+    );
+    try std.testing.expectEqual(
+        @as(usize, 1),
+        depth.visuals.len,
+    );
+
+    const visual = depth.visuals[0];
+
+    try std.testing.expectEqual(
+        @as(u32, 0x00000020),
+        visual.visual_id,
+    );
+    try std.testing.expectEqual(
+        Response.VisualClass.static_gray,
+        visual.class,
+    );
+    try std.testing.expectEqual(
+        @as(u8, 4),
+        visual.bits_per_rgb_value,
+    );
+    try std.testing.expectEqual(
+        @as(u16, 8),
+        visual.colormap_entries,
+    );
+    try std.testing.expectEqual(
+        @as(u32, 0),
+        visual.red_mask,
+    );
+    try std.testing.expectEqual(
+        @as(u32, 0),
+        visual.green_mask,
+    );
+    try std.testing.expectEqual(
+        @as(u32, 0),
+        visual.blue_mask,
+    );
+}
+
+test "rejects an invalid setup response status" {
+    const bytes = [_]u8{3};
+    var reader = Reader.fixed(&bytes);
+
+    try std.testing.expectError(
+        error.InvalidResponse,
+        readStatus(&reader),
+    );
+}
+
+test "rejects an invalid backing stores value" {
+    const bytes = [_]u8{3};
+    var reader = Reader.fixed(&bytes);
+
+    try std.testing.expectError(
+        error.InvalidResponse,
+        readBackingStores(&reader),
+    );
+}
+
+test "rejects an invalid visual class value" {
+    const bytes = [_]u8{6};
+    var reader = Reader.fixed(&bytes);
+
+    try std.testing.expectError(
+        error.InvalidResponse,
+        readVisualClass(&reader),
+    );
+}
+
+test "rejects an invalid byte order value" {
+    const bytes = [_]u8{2};
+    var reader = Reader.fixed(&bytes);
+
+    try std.testing.expectError(
+        error.InvalidResponse,
+        readEndian(&reader),
+    );
+}
